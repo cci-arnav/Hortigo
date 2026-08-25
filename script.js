@@ -26,8 +26,8 @@ const FORM_CONFIG = {
       polyhouseArea: "ENTRY_ID_POLYHOUSE_AREA",
       crops: "ENTRY_ID_CROPS",
       productionStage: "ENTRY_ID_PRODUCTION_STAGE",
-      buyerInterest: "ENTRY_ID_BUYER_INTEREST"
-    }
+      buyerInterest: "ENTRY_ID_BUYER_INTEREST",
+    },
   },
   buyer: {
     baseUrl: "GOOGLE_FORM_URL_HERE",
@@ -39,9 +39,9 @@ const FORM_CONFIG = {
       phone: "ENTRY_ID_PHONE",
       location: "ENTRY_ID_LOCATION",
       interest: "ENTRY_ID_INTEREST",
-      message: "ENTRY_ID_MESSAGE"
-    }
-  }
+      message: "ENTRY_ID_MESSAGE",
+    },
+  },
 };
 
 /**
@@ -53,7 +53,9 @@ const FORM_CONFIG = {
 function buildPrefilledUrl(configKey, values) {
   const config = FORM_CONFIG[configKey];
   if (!config || !config.baseUrl || config.baseUrl === "GOOGLE_FORM_URL_HERE") {
-    console.warn(`[HortiGo] Google Form URL for "${configKey}" is not configured yet.`);
+    console.warn(
+      `[HortiGo] Google Form URL for "${configKey}" is not configured yet.`,
+    );
     return null;
   }
   const url = new URL(config.baseUrl);
@@ -112,36 +114,45 @@ document.addEventListener("DOMContentLoaded", () => {
   navToggle.addEventListener("click", () => {
     toggleMobileMenu();
   });
-  mobileMenu.querySelectorAll("a.nav-item").forEach(link => {
+  mobileMenu.querySelectorAll("a.nav-item").forEach((link) => {
     link.addEventListener("click", closeMobileMenu);
   });
-  mobileMenu.querySelectorAll("[data-open-modal]").forEach(button => {
+  mobileMenu.querySelectorAll("[data-open-modal]").forEach((button) => {
     button.addEventListener("click", closeMobileMenu);
   });
-  document.addEventListener("click", event => {
+  document.addEventListener("click", (event) => {
     if (!mobileMenu.classList.contains("open")) return;
-    if (!mobileMenu.contains(event.target) && !navToggle.contains(event.target)) {
+    if (
+      !mobileMenu.contains(event.target) &&
+      !navToggle.contains(event.target)
+    ) {
       closeMobileMenu();
     }
   });
-  window.addEventListener("resize", () => {
-    if (window.innerWidth > 1120) closeMobileMenu();
-  }, { passive: true });
+  window.addEventListener(
+    "resize",
+    () => {
+      if (window.innerWidth > 1120) closeMobileMenu();
+    },
+    { passive: true },
+  );
 
   /* ------------------------------------------------------------------ */
   /* Active nav link tracking (single-active, based on section in view) */
   /* ------------------------------------------------------------------ */
-  const navAnchors = Array.from(document.querySelectorAll("nav a.nav-item, .mobile-menu a.nav-item"));
+  const navAnchors = Array.from(
+    document.querySelectorAll("nav a.nav-item, .mobile-menu a.nav-item"),
+  );
   const sectionIds = navAnchors
-    .map(a => a.getAttribute("href"))
-    .filter(href => href && href.startsWith("#"))
-    .map(href => href.slice(1));
+    .map((a) => a.getAttribute("href"))
+    .filter((href) => href && href.startsWith("#"))
+    .map((href) => href.slice(1));
   const sections = sectionIds
-    .map(id => document.getElementById(id))
+    .map((id) => document.getElementById(id))
     .filter(Boolean);
 
   function setActiveNav(id) {
-    navAnchors.forEach(a => {
+    navAnchors.forEach((a) => {
       const isMatch = a.getAttribute("href") === `#${id}`;
       a.classList.toggle("active", isMatch);
     });
@@ -149,18 +160,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if ("IntersectionObserver" in window && sections.length) {
     const navObserver = new IntersectionObserver(
-      entries => {
+      (entries) => {
         // Pick the entry closest to the top of the viewport that is intersecting.
         const visible = entries
-          .filter(e => e.isIntersecting)
+          .filter((e) => e.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
         if (visible.length > 0) {
           setActiveNav(visible[0].target.id);
         }
       },
-      { rootMargin: "-40% 0px -50% 0px", threshold: 0 }
+      { rootMargin: "-40% 0px -50% 0px", threshold: 0 },
     );
-    sections.forEach(sec => navObserver.observe(sec));
+    sections.forEach((sec) => navObserver.observe(sec));
   }
 
   /* ------------------------------------------------------------------ */
@@ -185,21 +196,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (lastFocusedEl) lastFocusedEl.focus({ preventScroll: true });
   }
 
-  openers.forEach(btn => {
+  openers.forEach((btn) => {
     btn.addEventListener("click", () => {
       closeMobileMenu();
       openModal(btn.getAttribute("data-open-modal"));
     });
   });
-  closers.forEach(btn => {
-    btn.addEventListener("click", () => closeModal(btn.closest(".modal-overlay")));
+  closers.forEach((btn) => {
+    btn.addEventListener("click", () =>
+      closeModal(btn.closest(".modal-overlay")),
+    );
   });
-  document.querySelectorAll(".modal-overlay").forEach(overlay => {
-    overlay.addEventListener("click", e => {
+  document.querySelectorAll(".modal-overlay").forEach((overlay) => {
+    overlay.addEventListener("click", (e) => {
       if (e.target === overlay) closeModal(overlay);
     });
   });
-  document.addEventListener("keydown", e => {
+  document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeMobileMenu();
       document.querySelectorAll(".modal-overlay.open").forEach(closeModal);
@@ -210,7 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
   /* Form submit -> build Google Forms prefill URL -> redirect          */
   /* ------------------------------------------------------------------ */
   function handleFormSubmit(formEl, configKey, fieldMap) {
-    formEl.addEventListener("submit", e => {
+    formEl.addEventListener("submit", (e) => {
       e.preventDefault();
 
       if (!formEl.checkValidity()) {
@@ -220,7 +233,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const data = new FormData(formEl);
       const values = {};
-      Object.keys(fieldMap).forEach(key => {
+      Object.keys(fieldMap).forEach((key) => {
         values[key] = (data.get(fieldMap[key]) || "").toString().trim();
       });
 
@@ -232,7 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Google Form not configured yet — don't dead-end the user.
         alert(
           "Thanks! Registration is being finalized — this form will connect to our Google Form shortly. " +
-          "Your details have not been saved yet."
+            "Your details have not been saved yet.",
         );
       }
     });
@@ -249,7 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
       polyhouseArea: "polyhouseArea",
       crops: "crops",
       productionStage: "productionStage",
-      buyerInterest: "buyerInterest"
+      buyerInterest: "buyerInterest",
     });
   }
 
@@ -263,7 +276,7 @@ document.addEventListener("DOMContentLoaded", () => {
       phone: "phone",
       location: "location",
       interest: "interest",
-      message: "message"
+      message: "message",
     });
   }
 
@@ -272,14 +285,14 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ------------------------------------------------------------------ */
   const rmTabs = document.querySelectorAll(".rm-tab");
   const rmPanels = document.querySelectorAll(".rm-panel");
-  rmTabs.forEach(tab => {
+  rmTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       const target = tab.getAttribute("data-tab");
-      rmTabs.forEach(t => {
+      rmTabs.forEach((t) => {
         t.classList.toggle("active", t === tab);
         t.setAttribute("aria-selected", t === tab ? "true" : "false");
       });
-      rmPanels.forEach(p => p.classList.toggle("active", p.id === target));
+      rmPanels.forEach((p) => p.classList.toggle("active", p.id === target));
     });
   });
 
@@ -289,18 +302,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const revealEls = document.querySelectorAll(".reveal, .hiw-step");
   if ("IntersectionObserver" in window) {
     const revealObserver = new IntersectionObserver(
-      entries => {
-        entries.forEach(entry => {
+      (entries) => {
+        entries.forEach((entry) => {
           if (entry.isIntersecting) {
             entry.target.classList.add("in-view");
             revealObserver.unobserve(entry.target);
           }
         });
       },
-      { threshold: 0.12, rootMargin: "0px 0px -60px 0px" }
+      { threshold: 0.12, rootMargin: "0px 0px -60px 0px" },
     );
-    revealEls.forEach(el => revealObserver.observe(el));
+    revealEls.forEach((el) => revealObserver.observe(el));
   } else {
-    revealEls.forEach(el => el.classList.add("in-view"));
+    revealEls.forEach((el) => el.classList.add("in-view"));
   }
 });
