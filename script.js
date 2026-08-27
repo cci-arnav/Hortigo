@@ -6,67 +6,110 @@
 /* --------------------------------------------------------------------------
    GOOGLE FORM CONFIGURATION
    --------------------------------------------------------------------------
-   Fill in the real Google Form URL and entry IDs here once available.
-   Everything that talks to Google Forms reads from this single object —
-   no URLs or entry IDs are hardcoded anywhere else in the codebase.
-
-   To find entry IDs: open your Google Form, click "Get pre-filled link",
-   fill in dummy values, click "Get link", and inspect the generated URL —
-   each field appears as entry.XXXXXXXXX=value.
+   Centralized configuration object for Google Forms integration.
+   All entry IDs and URLs are defined here.
+   URLSearchParams automatically handles special characters, spaces, Hindi text.
 -------------------------------------------------------------------------- */
 const FORM_CONFIG = {
   farmer: {
-    baseUrl: "GOOGLE_FORM_URL_HERE", // e.g. https://docs.google.com/forms/d/e/XXXXXXX/viewform
+    baseUrl: "https://docs.google.com/forms/d/e/1FAIpQLSfPi_VdyjSsqbRE29vk625EI3OXPhrhIK5eEZO6Har9556aUw/viewform",
     fields: {
-      name: "ENTRY_ID_NAME",
-      phone: "ENTRY_ID_PHONE",
-      email: "ENTRY_ID_EMAIL",
-      location: "ENTRY_ID_LOCATION",
-      farmName: "ENTRY_ID_FARM_NAME",
-      polyhouseArea: "ENTRY_ID_POLYHOUSE_AREA",
-      crops: "ENTRY_ID_CROPS",
-      productionStage: "ENTRY_ID_PRODUCTION_STAGE",
-      buyerInterest: "ENTRY_ID_BUYER_INTEREST",
+      name: "2005620554",
+      phone: "1166974658",
+      email: "1045781291",
+      location: "1065046570",
+      farmName: "638734931",
+      polyhouseArea: "839337160",
+      productionStage: "226093879",
+      crops: "720150919",
+      buyerInterest: "161799916",
+      consent: "1223456335",
     },
   },
   buyer: {
-    baseUrl: "GOOGLE_FORM_URL_HERE",
+    baseUrl: "https://docs.google.com/forms/d/e/1FAIpQLSf_UETLjiJ6xk7LqLh9192-yr8PEdjZ6GsBUIv99hjlqHb79A/viewform",
     fields: {
-      name: "ENTRY_ID_NAME",
-      organization: "ENTRY_ID_ORGANIZATION",
-      organizationType: "ENTRY_ID_ORG_TYPE",
-      email: "ENTRY_ID_EMAIL",
-      phone: "ENTRY_ID_PHONE",
-      location: "ENTRY_ID_LOCATION",
-      interest: "ENTRY_ID_INTEREST",
-      message: "ENTRY_ID_MESSAGE",
+      name: "2005620554",
+      organization: "1003471167",
+      organizationType: "1204867441",
+      email: "1045781291",
+      phone: "1166974658",
+      location: "1065046570",
+      interest: "839337160",
+      message: "851211234",
     },
   },
 };
 
+/* --------------------------------------------------------------------------
+   FORM DATA PERSISTENCE (sessionStorage)
+   Stores form values during the session so users don't lose data on reload.
+-------------------------------------------------------------------------- */
+function saveFormData(formId, formEl) {
+  const data = new FormData(formEl);
+  const values = {};
+  for (let [key, value] of data) {
+    values[key] = value;
+  }
+  sessionStorage.setItem(`hortigo_form_${formId}`, JSON.stringify(values));
+}
+
+function loadFormData(formId, formEl) {
+  const stored = sessionStorage.getItem(`hortigo_form_${formId}`);
+  if (!stored) return;
+  
+  try {
+    const values = JSON.parse(stored);
+    Object.entries(values).forEach(([key, value]) => {
+      const field = formEl.querySelector(`[name="${key}"]`);
+      if (field) {
+        if (field.type === "checkbox") {
+          field.checked = value === "on" || value === true;
+        } else {
+          field.value = value;
+        }
+      }
+    });
+  } catch (e) {
+    console.error("Failed to restore form data:", e);
+  }
+}
+
+function clearFormData(formId) {
+  sessionStorage.removeItem(`hortigo_form_${formId}`);
+}
+
 /**
- * Builds a Google Forms "prefilled" URL from a config entry and a plain
- * object of form values. Falls back gracefully (logs + returns null) if
- * the config hasn't been filled in yet, so the site never breaks before
- * the real form is wired up.
+ * Builds a Google Forms prefilled URL from config and form values.
+ * Uses URLSearchParams to automatically handle special characters, spaces, Hindi text, etc.
+ * 
+ * @param {string} configKey - "farmer" or "buyer"
+ * @param {Object} values - form field values
+ * @returns {string|null} prefilled URL or null if not configured
  */
 function buildPrefilledUrl(configKey, values) {
   const config = FORM_CONFIG[configKey];
-  if (!config || !config.baseUrl || config.baseUrl === "GOOGLE_FORM_URL_HERE") {
-    console.warn(
-      `[HortiGo] Google Form URL for "${configKey}" is not configured yet.`,
-    );
+  if (!config || !config.baseUrl) {
+    console.warn(`[HortiGo] Google Form URL for "${configKey}" is not configured.`);
     return null;
   }
+
   const url = new URL(config.baseUrl);
+  const params = new URLSearchParams();
+
   Object.entries(config.fields).forEach(([fieldKey, entryId]) => {
-    if (!entryId || entryId.startsWith("ENTRY_ID_")) return;
     const value = values[fieldKey];
-    if (value !== undefined && value !== null && value !== "") {
-      url.searchParams.set(`entry.${entryId}`, value);
+    
+    // Only set params for non-empty values
+    if (value !== undefined && value !== null && value !== "" && value !== false) {
+      // Entry ID needs the "entry." prefix
+      params.set(`entry.${entryId}`, String(value).trim());
     }
   });
-  return url.toString();
+
+  // Build final URL with usp=pp_url parameter for prefill mode
+  const finalUrl = `${config.baseUrl}?usp=pp_url&${params.toString()}`;
+  return finalUrl;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -222,30 +265,83 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ------------------------------------------------------------------ */
   /* Form submit -> build Google Forms prefill URL -> redirect          */
   /* ------------------------------------------------------------------ */
-  function handleFormSubmit(formEl, configKey, fieldMap) {
+  
+  /**
+   * Creates a form submission handler.
+   * - Validates required fields and consent
+   * - Saves form data to sessionStorage
+   * - Shows loading state
+   * - Generates prefilled Google Forms URL
+   * - Redirects to Google Form
+   */
+  function handleFormSubmit(formId, formEl, configKey, fieldMap) {
+    // Load any saved data when form loads
+    loadFormData(formId, formEl);
+
+    // Auto-save form data as user fills it
+    formEl.addEventListener("input", () => {
+      saveFormData(formId, formEl);
+    });
+    formEl.addEventListener("change", () => {
+      saveFormData(formId, formEl);
+    });
+
     formEl.addEventListener("submit", (e) => {
       e.preventDefault();
 
+      // Standard HTML5 validation first
       if (!formEl.checkValidity()) {
         formEl.reportValidity();
         return;
       }
 
+      // Validate consent checkbox explicitly
+      const consentCheckbox = formEl.querySelector('[name="consent"]');
+      if (consentCheckbox && !consentCheckbox.checked) {
+        consentCheckbox.focus();
+        alert("Please agree to the consent statement to continue.");
+        return;
+      }
+
+      // Collect form values
       const data = new FormData(formEl);
       const values = {};
-      Object.keys(fieldMap).forEach((key) => {
-        values[key] = (data.get(fieldMap[key]) || "").toString().trim();
+      
+      Object.entries(fieldMap).forEach(([key]) => {
+        const fieldName = fieldMap[key];
+        let value = (data.get(fieldName) || "").toString().trim();
+        values[key] = value;
       });
 
+      // For FARMER form: include the full consent text for Google Forms
+      // For BUYER form: only include consent if needed (currently no consent entry ID for buyer)
+      if (configKey === "farmer" && consentCheckbox && consentCheckbox.checked) {
+        values.consent = "I agree to be contacted by HortiGo regarding farmer registration and buyer connections. | मैं HortiGo को किसान पंजीकरण और खरीदारों से जुड़ने के संबंध में मुझसे संपर्क करने की सहमति देता/देती हूँ।";
+      }
+
+      // Build the prefilled URL
       const prefillUrl = buildPrefilledUrl(configKey, values);
 
       if (prefillUrl) {
-        window.open(prefillUrl, "_blank", "noopener");
+        // Show loading state
+        const submitBtn = formEl.querySelector('[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Opening secure registration form...";
+
+        // Brief delay for UX, then redirect
+        setTimeout(() => {
+          clearFormData(formId);
+          window.open(prefillUrl, "_blank", "noopener");
+          
+          // Restore button after opening
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+        }, 500);
       } else {
-        // Google Form not configured yet — don't dead-end the user.
+        console.error(`Google Form not configured for ${configKey}`);
         alert(
-          "Thanks! Registration is being finalized — this form will connect to our Google Form shortly. " +
-            "Your details have not been saved yet.",
+          "Registration form is being finalized. Please try again shortly."
         );
       }
     });
@@ -253,7 +349,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const farmerForm = document.getElementById("farmerForm");
   if (farmerForm) {
-    handleFormSubmit(farmerForm, "farmer", {
+    handleFormSubmit("farmer", farmerForm, "farmer", {
       name: "name",
       phone: "phone",
       email: "email",
@@ -263,12 +359,13 @@ document.addEventListener("DOMContentLoaded", () => {
       crops: "crops",
       productionStage: "productionStage",
       buyerInterest: "buyerInterest",
+      consent: "consent",
     });
   }
 
   const buyerForm = document.getElementById("buyerForm");
   if (buyerForm) {
-    handleFormSubmit(buyerForm, "buyer", {
+    handleFormSubmit("buyer", buyerForm, "buyer", {
       name: "name",
       organization: "organization",
       organizationType: "organizationType",
@@ -277,6 +374,7 @@ document.addEventListener("DOMContentLoaded", () => {
       location: "location",
       interest: "interest",
       message: "message",
+      consent: "consent",
     });
   }
 
